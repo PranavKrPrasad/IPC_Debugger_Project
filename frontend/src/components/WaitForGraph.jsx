@@ -3,8 +3,11 @@ import ForceGraph2D from 'react-force-graph-2d';
 
 export default function WaitForGraph({ onSelectCycle }) {
   const fgRef = useRef(null);
+  const containerRef = useRef(null);
+
   const [graph, setGraph] = useState({ nodes: [], links: [] });
   const [cycles, setCycles] = useState([]);
+  const [size, setSize] = useState({ width: 0, height: 420 });
 
   async function loadGraph() {
     try {
@@ -28,7 +31,7 @@ export default function WaitForGraph({ onSelectCycle }) {
       if (deadlocks.length) {
         const payload = JSON.parse(deadlocks[0].payload || '{}');
 
-        // 🔐 NORMALIZE CYCLES (IMPORTANT FIX)
+        // 🔐 NORMALIZE CYCLES (UNCHANGED)
         const normalized = (payload.cycles || []).map(c =>
           Array.isArray(c)
             ? { nodes: c, edges: [] }
@@ -52,15 +55,25 @@ export default function WaitForGraph({ onSelectCycle }) {
     return () => clearInterval(t);
   }, []);
 
+  // 🔧 NEW: bind graph to container size (NO LOGIC CHANGE)
+  useEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setSize({ width: rect.width, height: 420 });
+    }
+  }, []);
+
   return (
     <div>
-      <div style={{ height: 420 }}>
+      <div ref={containerRef} style={{ height: 420 }}>
         {graph.nodes.length === 0 ? (
           <div className="small">No wait-for relationships yet.</div>
         ) : (
           <ForceGraph2D
             ref={fgRef}
             graphData={graph}
+            width={size.width}
+            height={size.height}
             nodeLabel="id"
             linkDirectionalArrowLength={6}
             linkColor={() => '#38bdf8'}
@@ -81,6 +94,7 @@ export default function WaitForGraph({ onSelectCycle }) {
           }}
         >
           <strong>🔥 Deadlock {i + 1}</strong>
+
           <div className="small" style={{ marginTop: 4 }}>
             {(c.nodes || []).join(' → ')}
           </div>

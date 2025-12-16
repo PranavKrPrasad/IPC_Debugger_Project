@@ -23,6 +23,11 @@ export default function App() {
     try {
       const s = await (await fetch('/api/state')).json();
       setState(s);
+
+      // ✅ ADDITION 1: sync CPU timeline from backend snapshot
+      if (s.cpuTimeline) {
+        setCpuTimeline(s.cpuTimeline);
+      }
     } catch {
       console.error('State fetch failed');
     }
@@ -33,8 +38,9 @@ export default function App() {
     refreshState();
 
     const ws = new WebSocket(
-      (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host
+      (location.protocol === 'https:' ? 'wss://' : 'ws://') + 'localhost:4000'
     );
+
     wsRef.current = ws;
 
     ws.onmessage = (m) => {
@@ -44,12 +50,17 @@ export default function App() {
 
       if (data.kind === 'snapshot') {
         setState(data.state);
+
+        // ✅ ADDITION 1 (duplicate-safe): keep CPU Gantt in sync
+        if (data.state.cpuTimeline) {
+          setCpuTimeline(data.state.cpuTimeline);
+        }
       }
 
       if (data.kind === 'event') {
         setEvents(e => [data.event, ...e].slice(0, 400));
 
-        // CPU TIMELINE
+        // (existing logic untouched)
         if (data.event.type === 'cpu.tick' && data.event.payload?.pid) {
           setCpuTimeline(tl => [
             ...tl,
@@ -235,6 +246,14 @@ export default function App() {
             <h3>Processes</h3>
             {Object.values(state.processes).map(p => (
               <ProcessNode key={p.pid} p={p} onKill={killProcess} />
+            ))}
+          </div>
+
+          {/* ✅ ADDITION 2: Channels panel */}
+          <div className="box" style={{ marginTop: 12 }}>
+            <h3>Channels</h3>
+            {Object.values(state.channels).map(c => (
+              <ChannelPanel key={c.cid} c={c} />
             ))}
           </div>
 
