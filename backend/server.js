@@ -4,7 +4,7 @@ const http = require('http');
 const path = require('path');
 const WebSocket = require('ws');
 const Simulator = require('./simulator');
-const sqlite3 = require('sqlite3');
+const Database = require('better-sqlite3'); // 🔁 CHANGED
 const cors = require('cors');
 const bodyParser = require('body-parser');
 
@@ -17,18 +17,16 @@ app.use(bodyParser.json());
 
 /* ================= DATABASE ================= */
 const DB_FILE = path.join(__dirname, 'events.sqlite3');
-const db = new sqlite3.Database(DB_FILE);
+const db = new Database(DB_FILE); // 🔁 CHANGED
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      time INTEGER,
-      type TEXT,
-      payload TEXT
-    )
-  `);
-});
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    time INTEGER,
+    type TEXT,
+    payload TEXT
+  )
+`).run();
 
 /* ================= SIMULATOR ================= */
 let demoTimer = null;
@@ -40,9 +38,12 @@ const sim = new Simulator(evt => {
     payload: evt.payload || {}
   };
 
-  db.run(
-    'INSERT INTO events(time,type,payload) VALUES(?,?,?)',
-    [record.time, record.type, JSON.stringify(record.payload)]
+  db.prepare(
+    'INSERT INTO events(time,type,payload) VALUES(?,?,?)'
+  ).run(
+    record.time,
+    record.type,
+    JSON.stringify(record.payload)
   );
 
   broadcast({ kind: 'event', event: record });
@@ -129,19 +130,16 @@ app.get('/api/state', (req, res) => {
 
 /* ---- EVENTS (TIMELINE / CHARTS) ---- */
 app.get('/api/events', (req, res) => {
-  db.all(
-    'SELECT * FROM events ORDER BY id DESC LIMIT 500',
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ rows });
-    }
-  );
+  const rows = db
+    .prepare('SELECT * FROM events ORDER BY id DESC LIMIT 500')
+    .all();
+  res.json({ rows });
 });
 
 /* ---- TRUE BACKEND RESET ---- */
 app.post('/api/reset', (req, res) => {
   sim.reset();
-  db.run('DELETE FROM events');
+  db.prepare('DELETE FROM events').run();
   broadcastState();
   res.json({ ok: true });
 });
@@ -176,5 +174,5 @@ wss.on('connection', ws => {
 /* ================= START ================= */
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
-  console.log(`✅ IPC Debugger backend running at http://localhost:${PORT}`);
+  console.log(`✅ IPC Debugger backend running on port ${PORT}`);
 });
