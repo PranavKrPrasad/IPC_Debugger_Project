@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  backend:
+    container_name: ipc-debugger-backend
+    build:
+      context: ./backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - backend-db:/app/events.sqlite3
+    environment:
+      - NODE_ENV=development
+    command: npm start
+    restart: unless-stopped
+
+  frontend:
+    container_name: ipc-debugger-frontend
+    build:
+      context: ./frontend
+    command: >
+      sh -c "npm install &&
+             npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+
+volumes:
+  backend-db:
